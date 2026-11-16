@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="메모">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<title>나의 메모</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6f5e'/%3E%3Cpath d='M18 20h28M18 32h28M18 44h18' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f4ef; --surface: #ffffff; --text: #1d1f22; --muted: #6b6f76;
+  --line: #e3e0d8; --accent: #2f6f5e; --accent-text: #ffffff; --chip: #eeebe3;
+  --danger: #b3412f; --focus: #2f6f5e55;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a; --surface: #1f2125; --text: #e8e6e1; --muted: #9a9ea6;
+    --line: #2e3136; --accent: #5fb39b; --accent-text: #0f1513; --chip: #2a2d32;
+    --danger: #e0806e; --focus: #5fb39b55;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+.wrap { max-width: 680px; margin: 0 auto; }
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+button, input, textarea { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+  padding: 7px 12px; cursor: pointer; min-height: 38px;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.link { border: none; background: none; color: var(--muted); padding: 6px 4px; min-height: 0; }
+button.chip { background: var(--chip); border-color: transparent; border-radius: 999px; padding: 4px 12px; min-height: 32px; font-size: 14px; }
+button.chip.on { background: var(--accent); color: var(--accent-text); }
+button:disabled { opacity: .55; cursor: default; }
+input, textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+}
+input:focus, textarea:focus, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1 1 160px; min-width: 0; }
+.stack > * + * { margin-top: 10px; }
+.muted { color: var(--muted); font-size: 14px; }
+.msg { font-size: 14px; min-height: 20px; }
+.msg.err { color: var(--danger); }
+.hidden { display: none !important; }
+#login { max-width: 380px; margin: 12vh auto 0; }
+#composer.editing { border-color: var(--accent); }
+#list { list-style: none; padding: 0; margin: 14px 0 0; }
+#list li { padding: 14px 2px; border-bottom: 1px solid var(--line); }
+.meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 13.5px; margin-bottom: 4px; }
+.meta .place::before { content: "📍 "; }
+.content { white-space: pre-wrap; word-break: break-word; }
+.actions { margin-top: 4px; }
+.search { margin-top: 18px; }
+.empty { text-align: center; color: var(--muted); padding: 28px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section id="login" class="card stack hidden">
+    <h1>나의 메모</h1>
+    <p class="muted">대시보드와 같은 계정으로 로그인하세요.</p>
+    <form id="loginForm" class="stack">
+      <input id="email" type="email" autocomplete="username" placeholder="이메일" required>
+      <input id="password" type="password" autocomplete="current-password" placeholder="비밀번호" required>
+      <button class="primary" type="submit" style="width:100%">로그인</button>
+      <div id="loginMsg" class="msg err" role="alert"></div>
+    </form>
+  </section>
+
+  <main id="app" class="hidden">
+    <header>
+      <h1>나의 메모</h1>
+      <button class="link" id="logoutBtn" type="button">로그아웃</button>
+    </header>
+
+    <section id="composer" class="card stack" aria-label="메모 작성">
+      <div class="row">
+        <input id="when" class="grow" type="datetime-local" aria-label="날짜와 시간">
+        <button type="button" id="nowBtn">지금</button>
+      </div>
+      <div class="row">
+        <input id="place" class="grow" type="text" maxlength="200" placeholder="장소" aria-label="장소">
+        <button type="button" id="gpsBtn">현재 위치</button>
+      </div>
+      <div class="row" id="placeChips"></div>
+      <textarea id="content" placeholder="지금 떠오른 생각을 적어보세요" aria-label="내용"></textarea>
+      <div class="row">
+        <span id="saveMsg" class="msg grow" role="status"></span>
+        <button type="button" id="cancelEditBtn" class="hidden">취소</button>
+        <button type="button" id="saveBtn" class="primary">저장</button>
+      </div>
+      <div class="muted">Ctrl+Enter로 저장 · 작성 중인 글은 이 기기에 임시 저장됩니다</div>
+    </section>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="내용·장소 검색" aria-label="검색">
+    </div>
+    <ul id="list"></ul>
+    <div id="listMsg" class="msg" role="status"></div>
+    <div class="row" style="justify-content:center"><button type="button" id="moreBtn" class="hidden">더 보기</button></div>
+  </main>
+</div>
+
+<script id="core">
+(function (g) {
+  var DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // ilike 패턴용: \ % _ 를 문자 그대로 찾도록 이스케이프
+  function escapeSearch(q) {
+    return String(q).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  }
+  // PostgREST 큰따옴표 값 안에서 \ 와 " 이스케이프
+  function quote(v) {
+    return '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  }
+  function buildListQuery(opts) {
+    opts = opts || {};
+    var limit = opts.limit || 50;
+    var parts = ['select=*', 'order=noted_at.desc,id.desc', 'limit=' + limit];
+    if (opts.offset) parts.push('offset=' + opts.offset);
+    var s = (opts.search || '').trim();
+    if (s) {
+      var pat = quote('*' + escapeSearch(s) + '*');
+      parts.push('or=' + encodeURIComponent('(content.ilike.' + pat + ',place.ilike.' + pat + ')'));
+    }
+    return parts.join('&');
+  }
+  function formatWhen(iso, now) {
+    var d = new Date(iso);
+    now = now || new Date();
+    var t = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + DAYS[d.getDay()] + ') ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return d.getFullYear() === now.getFullYear() ? t : d.getFullYear() + '년 ' + t;
+  }
+  function toLocalInput(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function fromLocalInput(s) { return new Date(s).toISOString(); }
+  function isExpired(session, nowSec) {
+    if (!session || !session.expires_at) return true;
+    return session.expires_at - 60 <= nowSec;
+  }
+  g.MemoCore = { escapeSearch: escapeSearch, buildListQuery: buildListQuery, formatWhen: formatWhen,
+    toLocalInput: toLocalInput, fromLocalInput: fromLocalInput, isExpired: isExpired };
+})(globalThis);
+</script>
+
+<script id="app">
+(function () {
+  var CONFIG = {
+    url: 'https://ryvxtqqpuawmmftqndxz.supabase.co',
+    key: 'sb_publishable_rsLrobP-in1OegOekMLVvA_-VuX64qL'
+  };
+  var C = MemoCore;
+  var $ = function (id) { return document.getElementById(id); };
+  var PAGE = 50;
+
+  // ---------- 저장소 (실패해도 앱은 동작)
+  function load(k, fallback) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  var session = load('memo.session', null);
+  var places = load('memo.places', ['회사', '집']);
+
+  // ---------- 인증
+  async function authRequest(grant, body) {
+    var r = await fetch(CONFIG.url + '/auth/v1/token?grant_type=' + grant, {
+      method: 'POST', headers: { apikey: CONFIG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { var e = new Error(j.error_description || j.msg || j.message || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+    if (!j.expires_at && j.expires_in) j.expires_at = Math.floor(Date.now() / 1000) + j.expires_in;
+    session = { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at, email: j.user && j.user.email };
+    store('memo.session', session);
+    return session;
+  }
+  var refreshing = null;
+  function refresh() {
+    if (!session || !session.refresh_token) return Promise.reject(new Error('no session'));
+    if (!refreshing) {
+      refreshing = authRequest('refresh_token', { refresh_token: session.refresh_token })
+        .finally(function () { refreshing = null; });
+    }
+    return refreshing;
+  }
+  function signedOut(msg) {
+    session = null; store('memo.session', null);
+    showLogin(msg || '다시 로그인해 주세요.');
+  }
+
+  // ---------- REST
+  async function api(path, opts) {
+    opts = opts || {};
+    async function go() {
+      var headers = { apikey: CONFIG.key, Authorization: 'Bearer ' + session.access_token };
+      if (opts.body) headers['Content-Type'] = 'application/json';
+      if (opts.prefer) headers.Prefer = opts.prefer;
+      return fetch(CONFIG.url + '/rest/v1/' + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    }
+    if (!session) { signedOut(); throw new Error('로그인이 필요합니다.'); }
+    try {
+      if (C.isExpired(session, Date.now() / 1000)) await refresh();
+    } catch (e) {
+      if (e.status) { signedOut(); throw new Error('로그인이 만료되었습니다.'); }
+      throw new Error('서버에 연결할 수 없습니다.');
+    }
+    var r;
+    try { r = await go(); } catch (e) { throw new Error('서버에 연결할 수 없습니다.'); }
+    if (r.status === 401) {
+      try { await refresh(); } catch (e) { signedOut(); throw new Error('로그인이 만료되었습니다.'); }
+      r = await go();
+      if (r.status === 401) { signedOut(); throw new Error('로그인이 만료되었습니다.'); }
+    }
+    if (!r.ok) {
+      var j = await r.json().catch(function () { return {}; });
+      throw new Error(j.message || ('오류 (HTTP ' + r.status + ')'));
+    }
+    if (r.status === 204) return null;
+    return r.json().catch(function () { return null; });
+  }
+
+  // ---------- 화면 전환
+  function showLogin(msg) {
+    $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+    $('loginMsg').textContent = msg || '';
+    if (session && session.email) $('email').value = session.email;
+  }
+  function showApp() {
+    $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+    restoreDraft(); renderChips(); reload();
+  }
+
+  $('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    $('loginMsg').textContent = '';
+    var btn = e.submitter || this.querySelector('button'); btn.disabled = true;
+    try {
+      await authRequest('password', { email: $('email').value.trim(), password: $('password').value });
+      $('password').value = '';
+      showApp();
+    } catch (err) {
+      $('loginMsg').textContent = err.status === 400 ? '이메일 또는 비밀번호가 맞지 않습니다.' : '로그인 실패: ' + err.message;
+    } finally { btn.disabled = false; }
+  });
+
+  $('logoutBtn').addEventListener('click', function () {
+    if (session) fetch(CONFIG.url + '/auth/v1/logout', { method: 'POST', headers: { apikey: CONFIG.key, Authorization: 'Bearer ' + session.access_token } }).catch(function () {});
+    signedOut(' ');
+  });
+
+  // ---------- 작성
+  var editingId = null;
+  var whenTouched = false;
+  var coords = null; // {lat, lng}
+
+  function setNow() { $('when').value = C.toLocalInput(new Date()); whenTouched = false; }
+  $('nowBtn').addEventListener('click', setNow);
+  $('when').addEventListener('input', function () { whenTouched = true; saveDraft(); });
+  $('content').addEventListener('focus', function () { if (!whenTouched && !editingId) setNow(); });
+
+  function saveDraft() {
+    if (editingId) return;
+    var d = { content: $('content').value, place: $('place').value, when: whenTouched ? $('when').value : null, coords: coords };
+    store('memo.draft', d.content || d.place ? d : null);
+  }
+  function restoreDraft() {
+    var d = load('memo.draft', null);
+    setNow();
+    if (!d) return;
+    $('content').value = d.content || '';
+    $('place').value = d.place || '';
+    coords = d.coords || null;
+    if (d.when) { $('when').value = d.when; whenTouched = true; }
+  }
+  $('content').addEventListener('input', saveDraft);
+  $('place').addEventListener('input', function () { coords = null; renderChips(); saveDraft(); });
+
+  function renderChips() {
+    var box = $('placeChips'); box.textContent = '';
+    places.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'chip' + ($('place').value === p ? ' on' : ''); b.textContent = p;
+      b.addEventListener('click', function () { $('place').value = p; coords = null; renderChips(); saveDraft(); });
+      box.appendChild(b);
+    });
+    var edit = document.createElement('button');
+    edit.type = 'button'; edit.className = 'link'; edit.textContent = '편집';
+    edit.addEventListener('click', function () {
+      var v = prompt('자주 쓰는 장소를 쉼표로 구분해 입력하세요', places.join(', '));
+      if (v == null) return;
+      places = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 12);
+      store('memo.places', places); renderChips();
+    });
+    box.appendChild(edit);
+  }
+
+  $('gpsBtn').addEventListener('click', function () {
+    var msg = $('saveMsg'); msg.classList.remove('err');
+    if (!window.isSecureContext || !navigator.geolocation) {
+      msg.textContent = '현재 위치는 https 주소로 열었을 때만 쓸 수 있습니다.'; msg.classList.add('err'); return;
+    }
+    var btn = this; btn.disabled = true; msg.textContent = '위치 확인 중…';
+    navigator.geolocation.getCurrentPosition(async function (pos) {
+      coords = { lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) };
+      var label = coords.lat + ', ' + coords.lng;
+      try {
+        var r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&accept-language=ko&lat=' + coords.lat + '&lon=' + coords.lng);
+        var j = await r.json();
+        var a = j.address || {};
+        var parts = [a.city || a.town || a.village || a.county || a.state, a.borough || a.city_district || a.suburb || a.quarter || a.neighbourhood, j.name || a.road];
+        var named = parts.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join(' ');
+        if (named) label = named;
+      } catch (e) { /* 주소 변환 실패: 좌표만 사용 */ }
+      $('place').value = label; renderChips(); saveDraft();
+      msg.textContent = ''; btn.disabled = false;
+    }, function (err) {
+      msg.textContent = err.code === 1 ? '위치 권한이 거부되었습니다.' : '위치를 가져오지 못했습니다.';
+      msg.classList.add('err'); btn.disabled = false;
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  });
+
+  async function save() {
+    var content = $('content').value.trim();
+    var msg = $('saveMsg'); msg.classList.remove('err');
+    if (!content) { msg.textContent = '내용을 입력하세요.'; msg.classList.add('err'); return; }
+    var noted = whenTouched || editingId ? C.fromLocalInput($('when').value || C.toLocalInput(new Date())) : new Date().toISOString();
+    var place = $('place').value.trim() || null;
+    var body = { content: content, place: place, noted_at: noted, lat: coords ? coords.lat : null, lng: coords ? coords.lng : null };
+    $('saveBtn').disabled = true; msg.textContent = '저장 중…';
+    try {
+      if (editingId) {
+        var keepCoords = coords === 'keep';
+        if (keepCoords) { delete body.lat; delete body.lng; }
+        await api('memos?id=eq.' + editingId, { method: 'PATCH', body: body, prefer: 'return=minimal' });
+      } else {
+        await api('memos', { method: 'POST', body: body, prefer: 'return=minimal' });
+      }
+      store('memo.draft', null);
+      endEdit();
+      msg.textContent = '저장했습니다.';
+      setTimeout(function () { if (msg.textContent === '저장했습니다.') msg.textContent = ''; }, 2500);
+      reload();
+    } catch (e) {
+      msg.textContent = '저장 실패: ' + e.message + ' (작성한 내용은 남아 있습니다)'; msg.classList.add('err');
+    } finally { $('saveBtn').disabled = false; }
+  }
+  $('saveBtn').addEventListener('click', save);
+  $('content').addEventListener('keydown', function (e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+  });
+
+  function startEdit(m) {
+    editingId = m.id;
+    $('composer').classList.add('editing');
+    $('content').value = m.content;
+    $('place').value = m.place || '';
+    $('when').value = C.toLocalInput(new Date(m.noted_at)); whenTouched = true;
+    coords = 'keep';
+    $('cancelEditBtn').classList.remove('hidden');
+    $('saveBtn').textContent = '수정 저장';
+    renderChips();
+    $('composer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('content').focus();
+  }
+  function endEdit() {
+    var wasEditing = !!editingId;
+    editingId = null; coords = null;
+    $('composer').classList.remove('editing');
+    $('cancelEditBtn').classList.add('hidden');
+    $('saveBtn').textContent = '저장';
+    $('content').value = ''; $('place').value = '';
+    if (wasEditing) restoreDraft(); else setNow();
+    renderChips();
+  }
+  $('cancelEditBtn').addEventListener('click', function () { $('saveMsg').textContent = ''; endEdit(); });
+
+  // ---------- 목록
+  var shown = [];      // 화면에 있는 메모
+  var offset = 0;
+  var searchTerm = '';
+  var loadSeq = 0;
+
+  async function reload() { shown = []; offset = 0; $('list').textContent = ''; await loadMore(); }
+  async function loadMore() {
+    var seq = ++loadSeq;
+    $('listMsg').textContent = '불러오는 중…'; $('listMsg').classList.remove('err');
+    $('moreBtn').disabled = true;
+    try {
+      var rows = await api('memos?' + C.buildListQuery({ search: searchTerm, offset: offset, limit: PAGE }));
+      if (seq !== loadSeq) return;
+      offset += rows.length;
+      var seen = {}; shown.forEach(function (m) { seen[m.id] = true; });
+      rows.forEach(function (m) { if (!seen[m.id]) { shown.push(m); $('list').appendChild(renderItem(m)); } });
+      $('moreBtn').classList.toggle('hidden', rows.length < PAGE);
+      $('listMsg').textContent = '';
+      if (!shown.length) {
+        var li = document.createElement('li'); li.className = 'empty';
+        li.textContent = searchTerm ? '검색 결과가 없습니다.' : '아직 기록이 없습니다. 첫 메모를 남겨보세요.';
+        $('list').appendChild(li);
+      }
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      $('listMsg').textContent = '목록을 불러오지 못했습니다: ' + e.message; $('listMsg').classList.add('err');
+    } finally { $('moreBtn').disabled = false; }
+  }
+  $('moreBtn').addEventListener('click', loadMore);
+
+  function renderItem(m) {
+    var li = document.createElement('li');
+    var meta = document.createElement('div'); meta.className = 'meta';
+    var when = document.createElement('span'); when.textContent = C.formatWhen(m.noted_at); meta.appendChild(when);
+    if (m.place) {
+      var pl = m.lat != null ? document.createElement('a') : document.createElement('span');
+      pl.className = 'place'; pl.textContent = m.place;
+      if (m.lat != null) { pl.href = 'https://www.openstreetmap.org/?mlat=' + m.lat + '&mlon=' + m.lng + '#map=17/' + m.lat + '/' + m.lng; pl.target = '_blank'; pl.rel = 'noopener'; pl.style.color = 'inherit'; }
+      meta.appendChild(pl);
+    }
+    var body = document.createElement('div'); body.className = 'content'; body.textContent = m.content;
+    var act = document.createElement('div'); act.className = 'actions';
+    var ed = document.createElement('button'); ed.type = 'button'; ed.className = 'link'; ed.textContent = '수정';
+    ed.addEventListener('click', function () { startEdit(m); });
+    var del = document.createElement('button'); del.type = 'button'; del.className = 'link'; del.textContent = '삭제';
+    del.addEventListener('click', async function () {
+      if (!confirm('이 메모를 삭제할까요? 되돌릴 수 없습니다.')) return;
+      try {
+        await api('memos?id=eq.' + m.id, { method: 'DELETE', prefer: 'return=minimal' });
+        if (editingId === m.id) endEdit();
+        li.remove(); shown = shown.filter(function (x) { return x.id !== m.id; }); offset = Math.max(0, offset - 1);
+      } catch (e) { alert('삭제 실패: ' + e.message); }
+    });
+    act.appendChild(ed); act.appendChild(del);
+    li.appendChild(meta); li.appendChild(body); li.appendChild(act);
+    return li;
+  }
+
+  var searchTimer;
+  $('search').addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    var v = this.value;
+    searchTimer = setTimeout(function () { searchTerm = v.trim(); reload(); }, 300);
+  });
+
+  // ---------- 시작
+  if (session && session.refresh_token) showApp(); else showLogin();
+})();
+</script>
+</body>
+</html>
