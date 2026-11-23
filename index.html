@@ -76,6 +76,22 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
 .file button { min-height: 0; padding: 2px 6px; flex: none; }
 .file button.get { color: var(--accent); font-weight: 700; }
 
+.tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.tab { flex: 1; border-radius: 12px; font-weight: 700; }
+.tab.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.tab .badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--chip); color: var(--text); font-size: 12.5px; line-height: 20px; }
+.tab.on .badge { background: #ffffff33; color: inherit; }
+.tab .badge.alert { background: var(--danger); color: #fff; }
+#todoComposer.editing { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+.todo { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.todo input[type=checkbox] { width: 22px; height: 22px; padding: 0; flex: none; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+.todo .tbody { flex: 1; min-width: 0; }
+.todo .ttitle { word-break: break-word; }
+.todo .tmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; font-size: 13.5px; color: var(--muted); }
+.todo .due.overdue { color: var(--danger); font-weight: 700; }
+.todo .due.today { color: var(--accent); font-weight: 700; }
+.todo.is-done .ttitle { text-decoration: line-through; color: var(--muted); }
+.todo .tact { display: flex; gap: 2px; flex: none; }
 .filters { margin-top: 18px; }
 #list { margin-top: 10px; }
 .day { border-bottom: 1px solid var(--line); }
@@ -126,6 +142,12 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
     </header>
     <div id="exportMsg" class="msg" role="status"></div>
 
+    <nav class="tabs" role="tablist" aria-label="화면 선택">
+      <button type="button" id="tabMemo" class="tab on" role="tab" aria-selected="true">메모</button>
+      <button type="button" id="tabTodo" class="tab" role="tab" aria-selected="false">할 일<span id="todoBadge" class="badge hidden"></span></button>
+    </nav>
+
+    <div id="memoView">
     <section id="composer" class="card stack" aria-label="메모 작성">
       <div class="row">
         <input id="when" class="grow" type="datetime-local" aria-label="날짜와 시간">
@@ -159,6 +181,33 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
     <div id="list"></div>
     <div id="listMsg" class="msg" role="status"></div>
     <div class="row" style="justify-content:center"><button type="button" id="moreBtn" class="hidden">더 보기</button></div>
+    </div>
+
+    <div id="todoView" class="hidden">
+      <section id="todoComposer" class="card stack" aria-label="할 일 추가">
+        <input id="todoTitle" type="text" maxlength="500" placeholder="할 일을 입력하고 Enter" aria-label="할 일">
+        <div class="row">
+          <span class="label">마감일</span>
+          <input id="todoDue" class="grow" type="date" aria-label="마감일">
+        </div>
+        <div class="row">
+          <span class="label"></span>
+          <button type="button" id="todoDueToday" class="chip">오늘</button>
+          <button type="button" id="todoDueTomorrow" class="chip">내일</button>
+          <button type="button" id="todoDueClear" class="link">지우기</button>
+        </div>
+        <div class="row"><span class="label">카테고리</span><span class="row grow" id="todoCatChips"></span></div>
+        <div class="row">
+          <span id="todoMsg" class="msg grow" role="status"></span>
+          <button type="button" id="todoCancelBtn" class="hidden">취소</button>
+          <button type="button" id="todoSaveBtn" class="primary">추가</button>
+        </div>
+      </section>
+      <div class="filters"><div class="row" id="todoFilterChips"></div></div>
+      <div id="todoList"></div>
+      <div id="todoDone"></div>
+      <div id="todoListMsg" class="msg" role="status"></div>
+    </div>
   </main>
 </div>
 <div id="lightbox" class="hidden" role="dialog" aria-label="사진 크게 보기"><img alt=""></div>
@@ -325,6 +374,61 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
       return out;
     });
   }
+  // ---- 할 일
+  function localDateKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function dayNumber(key) {          // 'YYYY-MM-DD' -> 일 수(시간대·서머타임 영향 없음)
+    var p = String(key).split('-');
+    return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000);
+  }
+  function dueDiff(due, now) { return dayNumber(due) - dayNumber(localDateKey(now || new Date())); }
+  function dueState(due, now) {
+    if (!due) return 'none';
+    var d = dueDiff(due, now);
+    return d < 0 ? 'overdue' : d === 0 ? 'today' : 'later';
+  }
+  function formatDue(due, now) {
+    if (!due) return '';
+    now = now || new Date();
+    var p = String(due).split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
+    var t = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + DAYS[d.getDay()] + ')';
+    if (d.getFullYear() !== now.getFullYear()) t = d.getFullYear() + '년 ' + t;
+    var diff = dueDiff(due, now);
+    if (diff === 0) return t + ' · 오늘';
+    if (diff === 1) return t + ' · 내일';
+    if (diff < 0) return t + ' · ' + (-diff) + '일 지남';
+    return t;
+  }
+  function splitTodos(todos) {
+    var open = todos.filter(function (t) { return !t.done; });
+    var done = todos.filter(function (t) { return t.done; });
+    open.sort(function (a, b) {
+      if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
+      if (a.due_date && !b.due_date) return -1;
+      if (!a.due_date && b.due_date) return 1;
+      return a.id - b.id;
+    });
+    done.sort(function (a, b) { return String(b.done_at || '').localeCompare(String(a.done_at || '')) || b.id - a.id; });
+    return { open: open, done: done };
+  }
+  function todoStats(todos, now) {
+    var s = { open: 0, overdue: 0, today: 0 };
+    todos.forEach(function (t) {
+      if (t.done) return;
+      s.open++;
+      var st = dueState(t.due_date, now);
+      if (st === 'overdue') s.overdue++; else if (st === 'today') s.today++;
+    });
+    return s;
+  }
+  function toTodoCsv(todos) {
+    var rows = [['할 일', '카테고리', '마감일', '완료', '완료 시각', '등록일']];
+    todos.forEach(function (t) {
+      rows.push([t.title, t.category || '', t.due_date || '', t.done ? '예' : '아니오',
+        t.done && t.done_at ? dayKey(t.done_at) + ' ' + hm(new Date(t.done_at)) : '', t.created_at ? dayKey(t.created_at) : '']);
+    });
+    return '﻿' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n';
+  }
+
   function jwtSub(token) {
     try {
       var p = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -336,7 +440,8 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
   g.MemoCore = { escapeSearch: escapeSearch, buildListQuery: buildListQuery, formatWhen: formatWhen, dayKey: dayKey,
     toLocalInput: toLocalInput, fromLocalInput: fromLocalInput, isExpired: isExpired, titleOf: titleOf, bodyOf: bodyOf,
     groupByDate: groupByDate, toCsv: toCsv, toMarkdown: toMarkdown, crc32: crc32, makeZip: makeZip,
-    photoPath: photoPath, jwtSub: jwtSub, hm: hm, fileKey: fileKey, formatSize: formatSize, uniqueNames: uniqueNames, randomHex: randomHex };
+    photoPath: photoPath, jwtSub: jwtSub, hm: hm, fileKey: fileKey, formatSize: formatSize, uniqueNames: uniqueNames, randomHex: randomHex,
+    localDateKey: localDateKey, dueState: dueState, formatDue: formatDue, splitTodos: splitTodos, todoStats: todoStats, toTodoCsv: toTodoCsv };
 })(globalThis);
 </script>
 
@@ -514,6 +619,7 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
   function showApp() {
     $('login').classList.add('hidden'); $('app').classList.remove('hidden');
     restoreDraft(); renderChips(); renderFilterChips(); reload();
+    setTab(tab); if (tab !== 'todo') loadTodos();
   }
   $('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -896,7 +1002,7 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
   // ---------------------------------------------------------------- 내보내기
   $('exportBtn').addEventListener('click', async function () {
     var btn = this, msg = $('exportMsg'); msg.classList.remove('err');
-    if (!confirm('모든 메모와 사진을 zip 파일 하나로 내려받을까요?')) return;
+    if (!confirm('모든 메모·사진·파일·할 일을 zip 파일 하나로 내려받을까요?')) return;
     btn.disabled = true;
     try {
       var all = [], off = 0, rows;
@@ -929,7 +1035,10 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
           fileMap[atts[k].path] = 'files/' + attNames[k];
         } catch (e) { fileFailed++; }
       }
+      var todoRows = [];
+      try { msg.textContent = '할 일 모으는 중…'; todoRows = (await api('todos?select=*&order=id.asc&limit=1000')) || []; } catch (e) { /* v4 SQL 실행 전이면 건너뜀 */ }
       var enc = new TextEncoder();
+      if (todoRows.length) files.unshift({ name: root + '할일.csv', data: enc.encode(C.toTodoCsv(todoRows)) });
       files.unshift(
         { name: root + '메모.csv', data: enc.encode(C.toCsv(all)) },
         { name: root + '메모.md', data: enc.encode(C.toMarkdown(all, photoMap, fileMap)) },
@@ -937,12 +1046,178 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
       );
       var zip = new Blob([C.makeZip(files)], { type: 'application/zip' });
       saveBlobAs(zip, '나의메모_' + stamp + '.zip');
-      msg.textContent = '내려받기 완료: 메모 ' + all.length + '개, 사진 ' + (paths.length - failed) + '장, 파일 ' + (atts.length - fileFailed) + '개' +
+      msg.textContent = '내려받기 완료: 메모 ' + all.length + '개, 사진 ' + (paths.length - failed) + '장, 파일 ' + (atts.length - fileFailed) + '개, 할 일 ' + todoRows.length + '개' +
         (failed || fileFailed ? ' (실패: 사진 ' + failed + '장, 파일 ' + fileFailed + '개)' : '');
     } catch (e) {
       msg.textContent = '내보내기 실패: ' + e.message; msg.classList.add('err');
     } finally { btn.disabled = false; }
   });
+
+  // ---------------------------------------------------------------- 탭 / 할 일
+  var todos = [], todosLoaded = false, todoCat = null, todoFilter = null, todoEditing = null, doneOpen = false;
+  var tab = load('memo.tab', 'memo');
+
+  function setTab(t) {
+    tab = t === 'todo' ? 'todo' : 'memo'; store('memo.tab', tab);
+    $('memoView').classList.toggle('hidden', tab !== 'memo');
+    $('todoView').classList.toggle('hidden', tab !== 'todo');
+    $('tabMemo').classList.toggle('on', tab === 'memo');
+    $('tabTodo').classList.toggle('on', tab === 'todo');
+    $('tabMemo').setAttribute('aria-selected', String(tab === 'memo'));
+    $('tabTodo').setAttribute('aria-selected', String(tab === 'todo'));
+    if (tab === 'todo') loadTodos();
+  }
+  $('tabMemo').addEventListener('click', function () { setTab('memo'); });
+  $('tabTodo').addEventListener('click', function () { setTab('todo'); });
+
+  function todoNote(text, isErr) { var m = $('todoMsg'); m.textContent = text || ''; m.classList.toggle('err', !!isErr); }
+  function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return C.localDateKey(d); }
+  $('todoDueToday').addEventListener('click', function () { $('todoDue').value = addDays(0); });
+  $('todoDueTomorrow').addEventListener('click', function () { $('todoDue').value = addDays(1); });
+  $('todoDueClear').addEventListener('click', function () { $('todoDue').value = ''; });
+
+  async function loadTodos() {
+    var msg = $('todoListMsg'); msg.classList.remove('err'); msg.textContent = '';
+    try {
+      todos = (await api('todos?select=*&order=id.asc&limit=1000')) || [];
+      todosLoaded = true;
+    } catch (e) {
+      msg.textContent = /Could not find the table|schema cache/.test(e.message)
+        ? '할 일 저장소가 아직 없습니다. Supabase에서 memos_v4.sql을 실행해 주세요.'
+        : '할 일을 불러오지 못했습니다: ' + e.message;
+      msg.classList.add('err');
+    }
+    renderTodos();
+  }
+
+  function renderTodoChips() {
+    var cc = $('todoCatChips'); cc.textContent = '';
+    var list = categories.slice(); if (todoCat && list.indexOf(todoCat) < 0) list.push(todoCat);
+    list.forEach(function (c) { cc.appendChild(chip(c, todoCat === c, function () { todoCat = todoCat === c ? null : c; renderTodoChips(); })); });
+    var fc = $('todoFilterChips'); fc.textContent = '';
+    fc.appendChild(chip('전체', !todoFilter, function () { todoFilter = null; renderTodos(); }));
+    var fl = categories.slice(); if (todoFilter && fl.indexOf(todoFilter) < 0) fl.push(todoFilter);
+    fl.forEach(function (c) { fc.appendChild(chip(c, todoFilter === c, function () { todoFilter = todoFilter === c ? null : c; renderTodos(); })); });
+  }
+
+  function todoRow(t) {
+    var row = document.createElement('div'); row.className = 'todo' + (t.done ? ' is-done' : '');
+    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!t.done; cb.setAttribute('aria-label', t.title + ' 완료 표시');
+    cb.addEventListener('change', function () { toggleTodo(t, cb.checked); });
+    var body = document.createElement('div'); body.className = 'tbody';
+    var title = document.createElement('div'); title.className = 'ttitle'; title.textContent = t.title; body.appendChild(title);
+    var meta = document.createElement('div'); meta.className = 'tmeta';
+    if (t.category) { var cat = document.createElement('span'); cat.className = 'cat'; cat.textContent = t.category; meta.appendChild(cat); }
+    if (t.done) {
+      if (t.done_at) { var dn = document.createElement('span'); dn.textContent = '완료 ' + C.formatWhen(t.done_at); meta.appendChild(dn); }
+    } else if (t.due_date) {
+      var due = document.createElement('span'); due.className = 'due ' + C.dueState(t.due_date); due.textContent = '📅 ' + C.formatDue(t.due_date); meta.appendChild(due);
+    }
+    if (meta.childNodes.length) body.appendChild(meta);
+    var act = document.createElement('div'); act.className = 'tact';
+    if (!t.done) {
+      var ed = document.createElement('button'); ed.type = 'button'; ed.className = 'link edit'; ed.textContent = '수정';
+      ed.addEventListener('click', function () { startTodoEdit(t); }); act.appendChild(ed);
+    }
+    var del = document.createElement('button'); del.type = 'button'; del.className = 'link del'; del.textContent = '삭제';
+    del.addEventListener('click', function () { deleteTodo(t); }); act.appendChild(del);
+    row.append(cb, body, act);
+    return row;
+  }
+
+  function renderTodos() {
+    var st = C.todoStats(todos);
+    var badge = $('todoBadge');
+    badge.textContent = st.open; badge.classList.toggle('hidden', !todosLoaded || !st.open); badge.classList.toggle('alert', st.overdue > 0);
+    renderTodoChips();
+    var box = $('todoList'); box.textContent = '';
+    var shown = todoFilter ? todos.filter(function (t) { return t.category === todoFilter; }) : todos;
+    var sp = C.splitTodos(shown);
+    if (todosLoaded && !sp.open.length) {
+      var e = document.createElement('div'); e.className = 'empty';
+      e.textContent = todoFilter ? '이 카테고리에는 남은 할 일이 없습니다.' : '남은 할 일이 없습니다. 🎉';
+      box.appendChild(e);
+    }
+    sp.open.forEach(function (t) { box.appendChild(todoRow(t)); });
+
+    var dbox = $('todoDone'); dbox.textContent = '';
+    if (!sp.done.length) return;
+    var wrap = document.createElement('section'); wrap.className = 'day' + (doneOpen ? ' open' : '');
+    var head = document.createElement('button'); head.type = 'button'; head.className = 'day-head'; head.setAttribute('aria-expanded', String(doneOpen));
+    var caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = '▸';
+    var lbl = document.createElement('span'); lbl.textContent = '완료됨';
+    var cnt = document.createElement('span'); cnt.className = 'count'; cnt.textContent = '· ' + sp.done.length + '개';
+    head.append(caret, lbl, cnt);
+    head.addEventListener('click', function () { doneOpen = !doneOpen; renderTodos(); });
+    wrap.appendChild(head);
+    if (doneOpen) {
+      sp.done.forEach(function (t) { wrap.appendChild(todoRow(t)); });
+      var clr = document.createElement('button'); clr.type = 'button'; clr.className = 'link del'; clr.textContent = '완료 항목 모두 지우기';
+      clr.addEventListener('click', function () { clearDone(sp.done); });
+      wrap.appendChild(clr);
+    }
+    dbox.appendChild(wrap);
+  }
+
+  async function toggleTodo(t, done) {
+    var patch = { done: done, done_at: done ? new Date().toISOString() : null };
+    var prev = { done: t.done, done_at: t.done_at };
+    Object.assign(t, patch); renderTodos();
+    try { await api('todos?id=eq.' + t.id, { method: 'PATCH', body: patch, prefer: 'return=minimal' }); todoNote(''); }
+    catch (e) { Object.assign(t, prev); renderTodos(); todoNote('저장 실패: ' + e.message, true); }
+  }
+
+  async function saveTodo() {
+    var title = $('todoTitle').value.trim();
+    if (!title) { todoNote('할 일을 입력하세요.', true); return; }
+    var body = { title: title, category: todoCat, due_date: $('todoDue').value || null };
+    $('todoSaveBtn').disabled = true; todoNote('저장 중…');
+    try {
+      if (todoEditing) await api('todos?id=eq.' + todoEditing.id, { method: 'PATCH', body: body, prefer: 'return=minimal' });
+      else await api('todos', { method: 'POST', body: body, prefer: 'return=minimal' });
+      var wasEditing = !!todoEditing;
+      endTodoEdit(); todoNote('');
+      await loadTodos();
+      if (!wasEditing) $('todoTitle').focus();
+    } catch (e) {
+      todoNote('저장 실패: ' + e.message + ' (입력한 내용은 남아 있습니다)', true);
+    } finally { $('todoSaveBtn').disabled = false; }
+  }
+  $('todoSaveBtn').addEventListener('click', saveTodo);
+  $('todoTitle').addEventListener('keydown', function (e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter') { e.preventDefault(); saveTodo(); }
+  });
+
+  function startTodoEdit(t) {
+    todoEditing = t; $('todoTitle').value = t.title; $('todoDue').value = t.due_date || ''; todoCat = t.category || null;
+    $('todoSaveBtn').textContent = '수정 저장'; $('todoCancelBtn').classList.remove('hidden');
+    $('todoComposer').classList.add('editing'); renderTodoChips();
+    $('todoComposer').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('todoTitle').focus();
+  }
+  function endTodoEdit() {
+    var was = !!todoEditing;
+    todoEditing = null; $('todoTitle').value = ''; $('todoDue').value = ''; if (was) todoCat = null;
+    $('todoSaveBtn').textContent = '추가'; $('todoCancelBtn').classList.add('hidden');
+    $('todoComposer').classList.remove('editing'); renderTodoChips();
+  }
+  $('todoCancelBtn').addEventListener('click', function () { todoNote(''); endTodoEdit(); });
+
+  async function deleteTodo(t) {
+    if (!confirm('이 할 일을 삭제할까요? 되돌릴 수 없습니다.\n\n' + t.title)) return;
+    try {
+      await api('todos?id=eq.' + t.id, { method: 'DELETE', prefer: 'return=minimal' });
+      if (todoEditing && todoEditing.id === t.id) endTodoEdit();
+      todos = todos.filter(function (x) { return x !== t; }); renderTodos();
+    } catch (e) { todoNote('삭제 실패: ' + e.message, true); }
+  }
+  async function clearDone(list) {
+    if (!confirm('완료한 할 일 ' + list.length + '개를 모두 지울까요? 되돌릴 수 없습니다.')) return;
+    try {
+      await api('todos?id=in.(' + list.map(function (t) { return t.id; }).join(',') + ')', { method: 'DELETE', prefer: 'return=minimal' });
+      todos = todos.filter(function (t) { return list.indexOf(t) < 0; }); renderTodos();
+    } catch (e) { todoNote('삭제 실패: ' + e.message, true); }
+  }
 
   // ---------------------------------------------------------------- 시작
   if (session && session.refresh_token) showApp(); else showLogin();
