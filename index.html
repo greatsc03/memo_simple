@@ -6,24 +6,31 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="메모">
-<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#101126">
+<meta name="color-scheme" content="dark">
 <title>나의 메모</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6f5e'/%3E%3Cpath d='M18 20h28M18 32h28M18 44h18' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231B1159'/%3E%3Cg stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M18 20h28' stroke='%23FFF000'/%3E%3Cpath d='M18 32h28' stroke='%2300FF79'/%3E%3Cpath d='M18 44h18' stroke='%2300B7FF'/%3E%3C/g%3E%3C/svg%3E">
 <style>
+/* 색상: Synthwave 팔레트 (#FFF000 #00FF79 #00B7FF #1B1159 #101126) — 짙은 색 바탕 고정 */
 :root {
-  --bg: #f6f4ef; --surface: #ffffff; --text: #1d1f22; --muted: #6b6f76;
-  --line: #e3e0d8; --accent: #2f6f5e; --accent-text: #ffffff; --chip: #eeebe3;
-  --danger: #c0392b; --focus: #2f6f5e55; --cat: #e4efe9; --cat-text: #24584a;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16171a; --surface: #1f2125; --text: #e8e6e1; --muted: #9a9ea6;
-    --line: #2e3136; --accent: #5fb39b; --accent-text: #0f1513; --chip: #2a2d32;
-    --danger: #ef7d6b; --focus: #5fb39b55; --cat: #23362f; --cat-text: #8fd3bd;
-  }
+  color-scheme: dark;
+  --bg: #101126;          /* 페이지 바탕 */
+  --surface: #1B1159;     /* 카드 */
+  --input: #101126;       /* 입력칸 */
+  --chip: #2C2273;        /* 칩·보조 버튼 (카드 색을 조금 밝게) */
+  --line: #3A2F8F;        /* 구분선 */
+  --field-border: #7468E8;/* 입력칸 테두리 */
+  --text: #F3F1FF;
+  --muted: #B4AEE6;
+  --accent: #00FF79;      /* 네온 그린: 저장·선택·수정 */
+  --accent-text: #101126;
+  --cyan: #00B7FF;        /* 하늘색: 포커스·카테고리·수정 중 표시 */
+  --hi: #FFF000;          /* 노랑: 제목·오늘 마감·개수 표시 */
+  --danger: #FF6B8B;      /* 삭제·오류·마감 지남 (팔레트에 없어 추가한 분홍) */
+  --focus: #00B7FF88;
+  --cat: #00B7FF2E; --cat-text: #00B7FF;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -34,20 +41,21 @@ body {
 .wrap { max-width: 680px; margin: 0 auto; }
 header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 header h1 { flex: 1; }
-h1 { font-size: 21px; margin: 0; font-weight: 700; }
+h1 { font-size: 21px; margin: 0; font-weight: 700; color: var(--hi); text-shadow: 0 0 14px #FFF00055; }
 button, input, textarea { font: inherit; color: inherit; }
 button {
-  border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+  border: 1px solid var(--line); background: var(--chip); border-radius: 10px;
   padding: 7px 12px; cursor: pointer; min-height: 38px;
 }
-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 14px #00FF7955; }
 button.link { border: none; background: none; color: var(--muted); padding: 6px 4px; min-height: 0; }
 button.edit { color: var(--accent); font-weight: 700; }
 button.del { color: var(--danger); font-weight: 700; }
 button.chip { background: var(--chip); border-color: transparent; border-radius: 999px; padding: 4px 12px; min-height: 32px; font-size: 14.5px; }
 button.chip.on { background: var(--accent); color: var(--accent-text); }
 button:disabled { opacity: .55; cursor: default; }
-input, textarea { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; }
+input, textarea { width: 100%; background: var(--input); border: 1px solid var(--field-border); border-radius: 10px; padding: 9px 11px; }
+::placeholder { color: var(--muted); opacity: .75; }
 input:focus, textarea:focus, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
@@ -60,7 +68,7 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
 .msg.err { color: var(--danger); }
 .hidden { display: none !important; }
 #login { max-width: 380px; margin: 12vh auto 0; }
-#composer.editing { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+#composer.editing { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--focus); }
 
 .thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
 .thumb { position: relative; width: 76px; height: 76px; border-radius: 10px; overflow: hidden; background: var(--chip); border: 1px solid var(--line); }
@@ -79,17 +87,17 @@ textarea { min-height: 130px; resize: vertical; line-height: 1.65; }
 .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .tab { flex: 1; border-radius: 12px; font-weight: 700; }
 .tab.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-.tab .badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--chip); color: var(--text); font-size: 12.5px; line-height: 20px; }
-.tab.on .badge { background: #ffffff33; color: inherit; }
-.tab .badge.alert { background: var(--danger); color: #fff; }
-#todoComposer.editing { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+.tab .badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--hi); color: var(--accent-text); font-size: 12.5px; line-height: 20px; }
+.tab.on .badge { background: var(--bg); color: var(--hi); }
+.tab .badge.alert, .tab.on .badge.alert { background: var(--danger); color: var(--accent-text); }
+#todoComposer.editing { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--focus); }
 .todo { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .todo input[type=checkbox] { width: 22px; height: 22px; padding: 0; flex: none; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
 .todo .tbody { flex: 1; min-width: 0; }
 .todo .ttitle { word-break: break-word; }
 .todo .tmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; font-size: 13.5px; color: var(--muted); }
 .todo .due.overdue { color: var(--danger); font-weight: 700; }
-.todo .due.today { color: var(--accent); font-weight: 700; }
+.todo .due.today { color: var(--hi); font-weight: 700; }
 .todo.is-done .ttitle { text-decoration: line-through; color: var(--muted); }
 .todo .tact { display: flex; gap: 2px; flex: none; }
 .filters { margin-top: 18px; }
